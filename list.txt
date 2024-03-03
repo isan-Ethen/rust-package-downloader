@@ -1,0 +1,2 @@
+# Paste here the output from a command execution, which has been written down.
+# $ sudo apt install --print-uris SoftwareName
