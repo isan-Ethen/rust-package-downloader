@@ -9,7 +9,7 @@ git clone https://github.com/isan-Ethen/rust-package-downloader.git
 ```
 
 ## Usage
-1. Show packages are needed by software.
+1. Show necessary packages for the software.
 ```sh
 sudo apt install --print-uris SoftwareName
 ```
