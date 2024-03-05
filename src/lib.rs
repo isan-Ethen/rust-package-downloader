@@ -1,3 +1,7 @@
+// The following code is quoted from The Rust Programming Language.
+// Official Website Link: https://doc.rust-jp.rs/book-ja/ch20-03-graceful-shutdown-and-cleanup.html
+// The code from the official website is provided under the Apache-2.0 and MIT License.
+
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
