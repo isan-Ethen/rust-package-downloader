@@ -53,10 +53,8 @@ impl ThreadPool {
 
         self.sender.send(Message::NewJob(job)).unwrap();
     }
-}
 
-impl Drop for ThreadPool {
-    fn drop(&mut self) {
+    pub fn join(&mut self) {
         for _ in &mut self.workers {
             self.sender.send(Message::Terminate).unwrap();
         }
