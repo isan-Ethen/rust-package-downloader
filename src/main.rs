@@ -5,19 +5,14 @@ use rust_package_downloader::ThreadPool;
 use std::fs;
 use std::fs::File;
 use std::io::copy;
-use std::sync::atomic::{
-    AtomicUsize,
-    Ordering::{Acquire, Release},
-};
+use std::path::Path;
 
-static NUMBER_OF_WORKING_THREAD: AtomicUsize = AtomicUsize::new(0);
 const LIST_FILE_PATH: &str = "list.txt";
 const DIR_PATH: &str = "packages/";
 const POOL_SIZE: usize = 4;
-static CONTENTS: Lazy<String> = Lazy::new(|| {
-    let contents = fs::read_to_string(LIST_FILE_PATH).expect("Couldn't read the file");
-    contents
-});
+
+static CONTENTS: Lazy<String> =
+    Lazy::new(|| fs::read_to_string(LIST_FILE_PATH).expect("Couldn't read the file"));
 
 error_chain! {
     foreign_links {
@@ -26,51 +21,50 @@ error_chain! {
     }
 }
 
-fn main() {
-    let pool = ThreadPool::new(POOL_SIZE);
-    fs::create_dir_all(DIR_PATH).expect("Couldn't create a directory");
+fn main() -> Result<()> {
+    let mut pool = ThreadPool::new(POOL_SIZE);
+    fs::create_dir_all(DIR_PATH)?;
 
-    let rows: Vec<&str> = CONTENTS.split("\n").collect::<Vec<&str>>();
+    let rows: Vec<&str> = CONTENTS.split('\n').collect();
     let len = rows.len();
 
-    for row in rows[..len - 1].iter() {
-        let package_info = row.split_whitespace().collect::<Vec<&str>>();
-        count_up();
+    for row in &rows[..len - 1] {
+        let package_info: Vec<&str> = row.split_whitespace().collect();
         pool.execute(move || {
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .enable_all()
                 .build()
                 .unwrap();
-            rt.block_on(async {
-                download_file(package_info).await;
+            rt.block_on(async move {
+                for i in 0..5 {
+                    match download_file(&package_info).await {
+                        Ok(_) => break,
+                        Err(e) => println!(
+                            "{} Coudn't download {}: {}",
+                            "-".repeat(i + 1),
+                            package_info[1],
+                            e
+                        ),
+                    }
+                }
             });
         });
     }
 
-    while NUMBER_OF_WORKING_THREAD.load(Acquire) != 0 {}
-
+    pool.join();
     println!("All files downloaded successfully!");
+    Ok(())
 }
 
-async fn download_file(package_info: Vec<&str>) {
+async fn download_file(package_info: &Vec<&str>) -> Result<()> {
     let url = package_info[0];
     let filename = package_info[1];
-    let mut dest = File::create(format!("{}/{}", DIR_PATH, filename))
-        .unwrap_or_else(|why| panic!("Couldn't creat file {}: {}", filename, why));
-    let response = reqwest::get(&url[1..url.len() - 1]).await;
-    let content: Bytes = response
-        .expect("There no Response!")
-        .bytes()
-        .await
-        .expect("Couldn't cast content to string");
-    copy(&mut content.as_ref(), &mut dest).expect("Couldn't write content into {}");
-    count_down();
-}
+    let dest_path = Path::new(DIR_PATH).join(filename);
+    let mut dest = File::create(dest_path)?;
 
-fn count_up() {
-    NUMBER_OF_WORKING_THREAD.fetch_add(1, Release);
-}
+    let response = reqwest::get(&url[1..url.len() - 1]).await?;
+    let content: Bytes = response.bytes().await?;
 
-fn count_down() {
-    NUMBER_OF_WORKING_THREAD.fetch_sub(1, Release);
+    copy(&mut content.as_ref(), &mut dest)?;
+    Ok(())
 }
