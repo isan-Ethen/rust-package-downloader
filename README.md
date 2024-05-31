@@ -1,6 +1,6 @@
 # rust-package-downloader
 
-This is an downloader for collect neccesary packages for installing software by apt.
+This is a downloader for collect neccesary packages for installing software by apt.
 
 ## Installation
 Get the latest version.
