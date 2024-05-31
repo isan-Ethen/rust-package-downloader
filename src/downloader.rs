@@ -7,11 +7,13 @@ use threadpool::ThreadPool;
 use bytes::Bytes;
 use error_chain::error_chain;
 use reqwest;
-use std::fs;
-use std::fs::File;
-use std::io::copy;
-use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::{
+    fs,
+    fs::File,
+    io::copy,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 error_chain! {
     foreign_links {
@@ -36,6 +38,7 @@ impl Downloader {
             .map(String::from)
             .collect();
         let package_num: usize = package_list.len();
+
         Downloader {
             package_list,
             directory_path: directory_path.to_string(),
@@ -106,6 +109,7 @@ impl Downloader {
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Err("File not found".into());
         }
+
         let content: Bytes = response.bytes().await?;
 
         if content.is_empty() {
