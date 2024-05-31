@@ -19,12 +19,12 @@ sudo apt install --print-uris SoftwareName
 >```
 >'http://ports.ubuntu.com/ubuntu-ports/pool/universe/a/autogen/libopts25_5.18.16-3_arm64.deb' libopts25_1%3a5.18.16-3_arm64.deb 55536 MD5Sum:9f0d852a9f64373bf5f0e832b2bc2e1f
 >```
-3. Execute.
+3. Run this downloader.
 ```sh
 cargo run
 ```
 4. Move packages to /var/cache/apt/archives .
-5. Execute apt install
+5. Run apt install
 ```sh
 sudo apt install SoftwareName
 ```
