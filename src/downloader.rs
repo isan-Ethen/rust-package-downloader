@@ -4,13 +4,13 @@ mod threadpool;
 use downloadresult::DownloadResult;
 use threadpool::ThreadPool;
 
-use bytes::Bytes;
 use error_chain::error_chain;
-use reqwest;
+use num_cpus;
+use reqwest::{self, Client};
 use std::{
     fs,
     fs::File,
-    io::copy,
+    io::Write,
     path::Path,
     sync::{Arc, Mutex},
 };
@@ -31,13 +31,19 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    pub fn new(filename: &str, directory_path: &str, poolsize: usize) -> Downloader {
+    pub fn new(filename: &str, directory_path: &str, poolsize: Option<usize>) -> Downloader {
         let package_list: Vec<String> = fs::read_to_string(filename)
             .expect("Couldn't read the file")
             .lines()
             .map(String::from)
             .collect();
         let package_num: usize = package_list.len();
+
+        let poolsize = if let Some(size) = poolsize {
+            size
+        } else {
+            num_cpus::get()
+        };
 
         Downloader {
             package_list,
@@ -50,12 +56,14 @@ impl Downloader {
 
     pub fn run(&mut self) {
         fs::create_dir_all(&self.directory_path).expect("Couldn't create directory");
+        let client = Arc::new(Client::new());
 
         for package in &self.package_list {
             let package_info: Vec<String> = package.split_whitespace().map(String::from).collect();
             let directory_path = self.directory_path.clone();
             let failed_packages = Arc::clone(&self.status);
             let package_num = Arc::clone(&self.package_num);
+            let client = client.clone();
 
             self.threadpool.execute(move || {
                 Downloader::download_files(
@@ -63,6 +71,7 @@ impl Downloader {
                     directory_path,
                     failed_packages,
                     package_num,
+                    client,
                 );
             });
         }
@@ -75,6 +84,7 @@ impl Downloader {
         directory_path: String,
         failed_packages: Arc<Mutex<DownloadResult>>,
         package_num: Arc<usize>,
+        client: Arc<Client>,
     ) {
         let rt = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
@@ -87,7 +97,7 @@ impl Downloader {
 
             loop {
                 if Downloader::handle_result(
-                    Downloader::download_file(&directory_path, &url, &file_name).await,
+                    Downloader::download_file(&directory_path, &url, &file_name, &client).await,
                     &cnt,
                     &file_name,
                     &url,
@@ -103,23 +113,24 @@ impl Downloader {
         });
     }
 
-    async fn download_file(directory_path: &str, url: &String, file_name: &String) -> Result<()> {
-        let response = reqwest::get(&url[1..url.len() - 1]).await?;
+    async fn download_file(
+        directory_path: &str,
+        url: &String,
+        file_name: &String,
+        client: &Arc<Client>,
+    ) -> Result<()> {
+        let mut response = client.get(&url[1..url.len() - 1]).send().await?;
 
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Err("File not found".into());
         }
 
-        let content: Bytes = response.bytes().await?;
-
-        if content.is_empty() {
-            return Err("Couldn't download file".into());
-        }
-
         let dest_path = Path::new(directory_path).join(file_name);
         let mut dest = File::create(dest_path)?;
 
-        copy(&mut content.as_ref(), &mut dest)?;
+        while let Some(chunk) = response.chunk().await? {
+            dest.write_all(&chunk)?;
+        }
         Ok(())
     }
 
